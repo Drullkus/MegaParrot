@@ -14,8 +14,6 @@ public class MegaparrotClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         AutoConfig.getGuiRegistry(ParrotConfig.class);
-        EntityRendererRegistry.register(Declarar.MEGA_PARROT_ENTITY_TYPE,
-                MegaParrotRenderer::new);
-
+        EntityRendererRegistry.register(Declarar.MEGA_PARROT_ENTITY_TYPE, MegaParrotRenderer::new);
     }
 }

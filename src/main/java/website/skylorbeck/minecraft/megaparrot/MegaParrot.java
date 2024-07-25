@@ -7,13 +7,18 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.biome.v1.BiomeModifications;
 import net.fabricmc.fabric.api.biome.v1.BiomeSelectors;
 import net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry;
+import net.minecraft.block.Blocks;
 import net.minecraft.entity.SpawnGroup;
 import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.entity.mob.MobEntity;
+import net.minecraft.item.Items;
+import net.minecraft.potion.Potions;
+import net.minecraft.recipe.BrewingRecipeRegistry;
+import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
 import net.minecraft.util.ActionResult;
-import net.minecraft.util.registry.Registry;
 import net.minecraft.world.biome.BiomeKeys;
-import software.bernie.geckolib3.GeckoLib;
+import software.bernie.geckolib.GeckoLib;
 
 import static website.skylorbeck.minecraft.megaparrot.Declarar.config;
 
@@ -51,11 +56,14 @@ public class MegaParrot implements ModInitializer {
             BiomeModifications.addSpawn(BiomeSelectors.includeByKey(BiomeKeys.PLAINS),SpawnGroup.CREATURE,Declarar.MEGA_PARROT_ENTITY_TYPE,config.spawnStuff.spawnWeightD,config.minGroupSize, config.maxGroupSize);
         }
 
-        Registry.register(Registry.ITEM,Declarar.getMegaParrotId("spawn_egg"),Declarar.MEGA_PARROT_EGG);
-        Registry.register(Registry.ITEM,Declarar.getMegaParrotId("parrot_meat"),Declarar.PARROT_MEAT);
-        Registry.register(Registry.ITEM,Declarar.getMegaParrotId("cooked_parrot_meat"),Declarar.COOKED_PARROT_MEAT);
-        Registry.register(Registry.ITEM,Declarar.getMegaParrotId("bird_whistle"),Declarar.BIRD_WHISTLE);
-        Registry.register(Registry.ITEM,Declarar.getMegaParrotId("mega_feather"),Declarar.MEGA_FEATHER);
+        Registry.register(Registries.ITEM, Declarar.getMegaParrotId("spawn_egg"), Declarar.MEGA_PARROT_EGG);
+        Registry.register(Registries.ITEM, Declarar.getMegaParrotId("parrot_meat"), Declarar.PARROT_MEAT);
+        Registry.register(Registries.ITEM, Declarar.getMegaParrotId("cooked_parrot_meat"), Declarar.COOKED_PARROT_MEAT);
+        Registry.register(Registries.ITEM, Declarar.getMegaParrotId("bird_whistle"), Declarar.BIRD_WHISTLE);
+        Registry.register(Registries.ITEM, Declarar.getMegaParrotId("mega_feather"), Declarar.MEGA_FEATHER);
 
+        Registry.register(Registries.STATUS_EFFECT, "megafy", Declarar.MEGAFY);
+        Registry.register(Registries.POTION, "mega_potion", Declarar.MEGA_POTION);
+        BrewingRecipeRegistry.registerPotionRecipe(Potions.AWKWARD, Blocks.HAY_BLOCK.asItem(), Declarar.MEGA_POTION);
     }
 }

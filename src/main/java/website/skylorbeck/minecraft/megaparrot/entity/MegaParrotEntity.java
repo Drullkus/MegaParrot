@@ -21,6 +21,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.recipe.Ingredient;
+import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.registry.tag.BiomeTags;
 import net.minecraft.sound.BlockSoundGroup;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
@@ -30,29 +32,31 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.math.random.Random;
+import net.minecraft.world.EntityView;
 import net.minecraft.world.LocalDifficulty;
 import net.minecraft.world.ServerWorldAccess;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.event.GameEvent;
 import org.jetbrains.annotations.Nullable;
-import software.bernie.geckolib3.core.IAnimatable;
-import software.bernie.geckolib3.core.PlayState;
-import software.bernie.geckolib3.core.builder.AnimationBuilder;
-import software.bernie.geckolib3.core.controller.AnimationController;
-import software.bernie.geckolib3.core.event.predicate.AnimationEvent;
-import software.bernie.geckolib3.core.manager.AnimationData;
-import software.bernie.geckolib3.core.manager.AnimationFactory;
+import software.bernie.geckolib.animatable.GeoEntity;
+import software.bernie.geckolib.core.animatable.GeoAnimatable;
+import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.object.PlayState;
+import software.bernie.geckolib.util.GeckoLibUtil;
 import website.skylorbeck.minecraft.megaparrot.Declarar;
 import website.skylorbeck.minecraft.megaparrot.mixin.HorseBaseEntityAccessor;
-import website.skylorbeck.minecraft.skylorlib.IMegable;
 
 import java.util.Arrays;
 import java.util.UUID;
 
-public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable {
+public class MegaParrotEntity extends AbstractHorseEntity implements GeoEntity {
     private static final Item[] BREEDING_INGREDIENT = {Items.WHEAT_SEEDS,Items.MELON_SEEDS,Items.BEETROOT_SEEDS,Items.PUMPKIN_SEEDS, Items.APPLE, Items.CARROT,Items.BEETROOT,Items.POTATO, Items.GOLDEN_CARROT, Items.GOLDEN_APPLE, Items.ENCHANTED_GOLDEN_APPLE};
-    private final AnimationFactory factory = new AnimationFactory(this);
+    private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private static final TrackedData<Integer> VARIANT = DataTracker.registerData(MegaParrotEntity.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Float> FALLING = DataTracker.registerData(MegaParrotEntity.class, TrackedDataHandlerRegistry.FLOAT);
     protected int soundTicks;
@@ -130,7 +134,7 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
         if (!this.isBaby()) {
             if (this.isTame() && player.shouldCancelInteraction()) {
                 this.openInventory(player);
-                return ActionResult.success(this.world.isClient);
+                return ActionResult.success(this.getWorld().isClient);
             }
             if (this.hasPassengers()) {
                 return super.interactMob(player, hand);
@@ -144,7 +148,7 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
             if (itemStack.isOf(Items.COOKIE)) {
                 this.addStatusEffect(new StatusEffectInstance(StatusEffects.POISON, 900));
                 if (player.isCreative() || !this.isInvulnerable()) {
-                    this.damage(DamageSource.player(player), Float.MAX_VALUE);
+                    this.damage(this.getDamageSources().playerAttack(player), Float.MAX_VALUE);
                 }
             }
             ActionResult actionResult = itemStack.useOnEntity(player, this, hand);
@@ -153,23 +157,23 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
             }
             if (!this.isTame()) {
                 this.playAngrySound();
-                return ActionResult.success(this.world.isClient);
+                return ActionResult.success(this.getWorld().isClient);
             }
             boolean bl2 = bl = !this.isBaby() && !this.isSaddled() && itemStack.isOf(Items.SADDLE);
             if (this.isHorseArmor(itemStack) || bl) {
                 this.openInventory(player);
-                return ActionResult.success(this.world.isClient);
+                return ActionResult.success(this.getWorld().isClient);
             }
         }
         this.putPlayerOnBack(player);
-        return ActionResult.success(this.world.isClient);
+        return ActionResult.success(this.getWorld().isClient);
     }
     public ActionResult interactBird(PlayerEntity player, ItemStack stack) {
         boolean bl = this.receiveFood(player, stack);
         if (!player.getAbilities().creativeMode) {
             stack.decrement(1);
         }
-        if (this.world.isClient) {
+        if (this.getWorld().isClient) {
             return ActionResult.CONSUME;
         }
         return bl ? ActionResult.SUCCESS : ActionResult.PASS;
@@ -194,8 +198,11 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
     @Nullable
     public EntityData initialize(ServerWorldAccess world, LocalDifficulty difficulty, SpawnReason spawnReason, @Nullable EntityData entityData, @Nullable NbtCompound entityNbt) {
         BlockPos blockPos = this.getBlockPos();
-        Biome biome = world.getBiome(blockPos).value();
-        this.setVariant(biome.isCold(blockPos)? 5 : biome.isHot(blockPos)?6: this.random.nextInt(5));
+		RegistryEntry<Biome> biome = world.getBiome(blockPos);
+        boolean biomeIsCold = biome.isIn(BiomeTags.SPAWNS_COLD_VARIANT_FROGS) || biome.isIn(BiomeTags.OCEAN_RUIN_COLD_HAS_STRUCTURE) || biome.isIn(BiomeTags.SPAWNS_SNOW_FOXES) || biome.isIn(BiomeTags.VILLAGE_SNOWY_HAS_STRUCTURE);
+        boolean biomeIsHot = biome.isIn(BiomeTags.DESERT_PYRAMID_HAS_STRUCTURE) || biome.isIn(BiomeTags.VILLAGE_DESERT_HAS_STRUCTURE) || biome.isIn(BiomeTags.RUINED_PORTAL_DESERT_HAS_STRUCTURE) || biome.isIn(BiomeTags.SNOW_GOLEM_MELTS);
+        int variant = biomeIsCold ? 5 : biomeIsHot ? 6 : this.random.nextInt(5);
+        this.setVariant(variant);
         return super.initialize(world, difficulty, spawnReason, entityData, entityNbt);
     }
 
@@ -207,49 +214,50 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
         return this.getDimensions(this.getPose()).height * 0.4;
     }
     @Override
-    public void updatePassengerPosition(Entity passenger) {
-        super.updatePassengerPosition(passenger);
+    public void updatePassengerPosition(Entity passenger, PositionUpdater positionUpdater) {
+        super.updatePassengerPosition(passenger, positionUpdater);
         if (passenger instanceof MobEntity mobEntity) {
             this.bodyYaw = mobEntity.bodyYaw;
         }
         float mobEntity = MathHelper.sin(this.bodyYaw * ((float) Math.PI / 180));
         float f = MathHelper.cos(this.bodyYaw * ((float) Math.PI / 180));
         float g = 0.5f;
-        passenger.setPosition(this.getX() + (double) (g * mobEntity), this.getY() + this.getMountedHeightOffset() + passenger.getHeightOffset(), this.getZ() - (double) (g * f));
         if (passenger instanceof LivingEntity) {
             ((LivingEntity) passenger).bodyYaw = this.bodyYaw;
         }
+        positionUpdater.accept(passenger, this.getX() + (double) (g * mobEntity), this.getY() + this.getMountedHeightOffset() + passenger.getRidingOffset(this), this.getZ() - (double) (g * f));
     }
 
     public void tickMovement() {
         super.tickMovement();
         this.prevFlapProgress = this.flapProgress;
         this.prevMaxWingDeviation = this.maxWingDeviation;
-        this.maxWingDeviation = (float)((double)this.maxWingDeviation + (double)(this.onGround ? -1 : 4) * 0.3D);
+        this.maxWingDeviation = (float)((double)this.maxWingDeviation + (double)(this.isOnGround() ? -1 : 4) * 0.3D);
         this.maxWingDeviation = MathHelper.clamp(this.maxWingDeviation, 0.0F, 1.0F);
-        if (!this.onGround && this.flapSpeed < 1.0F) {
+        if (!this.isOnGround() && this.flapSpeed < 1.0F) {
             this.flapSpeed = 1.0F;
         }
 
         this.flapSpeed = (float)((double)this.flapSpeed * 0.9D);
         Vec3d vec3d = this.getVelocity();
-        if (!this.onGround && vec3d.y < 0.0D) {
+        if (!this.isOnGround() && vec3d.y < 0.0D) {
             this.setVelocity(vec3d.multiply(1.0D, 0.6D, 1.0D));
         }
 
         this.flapProgress += this.flapSpeed * 2.0F;
 
-        if (!this.world.isClient && this.isAlive() && !this.isBaby() && --this.featherDropTime <= 0) {
+        if (!this.getWorld().isClient && this.isAlive() && !this.isBaby() && --this.featherDropTime <= 0) {
             for (int i = 0; i < this.random.nextInt(2)+1 ; i++) {
                 this.dropItem(Declarar.MEGA_FEATHER);
             }
             this.featherDropTime = this.random.nextInt(6000) + 6000;
         }
     }
-    @Override
-    protected boolean hasWings() {
-        return this.speed > this.flapProgress;
-    }
+
+    //@Override
+    //protected boolean hasWings() {
+    //    return this.speed > this.flapProgress;
+    //}
 
     @Override
     protected void addFlapEffects() {
@@ -275,14 +283,14 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
         } else if (item.isOf(Items.GOLDEN_CARROT)) {
             health = 4.0f;
             temper = 5;
-            if (!this.world.isClient && this.isTame() && this.getBreedingAge() == 0 && !this.isInLove()) {
+            if (!this.getWorld().isClient && this.isTame() && this.getBreedingAge() == 0 && !this.isInLove()) {
                 bl = true;
                 this.lovePlayer(player);
             }
         } else if (item.isOf(Items.GOLDEN_APPLE) || item.isOf(Items.ENCHANTED_GOLDEN_APPLE)) {
             health = 10.0f;
             temper = 10;
-            if (!this.world.isClient && this.isTame() && this.getBreedingAge() == 0 && !this.isInLove()) {
+            if (!this.getWorld().isClient && this.isTame() && this.getBreedingAge() == 0 && !this.isInLove()) {
                 bl = true;
                 this.lovePlayer(player);
             }
@@ -293,7 +301,7 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
         }
         if (temper > 0 && (bl || !this.isTame()) && this.getTemper() < this.getMaxTemper()) {
             bl = true;
-            if (!this.world.isClient) {
+            if (!this.getWorld().isClient) {
                 this.addTemper(temper);
             }
         }
@@ -308,7 +316,7 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
         ((HorseBaseEntityAccessor)this).invokeSetEating();
         this.eatingTicks = 10;
         if (!this.isSilent() && (soundEvent = this.getEatSound()) != null) {
-            this.world.playSound(null, this.getX(), this.getY(), this.getZ(), soundEvent, this.getSoundCategory(), 1.0f, 1.0f + (this.random.nextFloat() - this.random.nextFloat()) * 0.2f);
+            this.getWorld().playSound(null, this.getX(), this.getY(), this.getZ(), soundEvent, this.getSoundCategory(), 1.0f, 1.0f + (this.random.nextFloat() - this.random.nextFloat()) * 0.2f);
         }
     }
 
@@ -335,7 +343,7 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
     @Override
     @Nullable
     public SoundEvent getAmbientSound() {
-        return ParrotEntity.getRandomSound(this.world, this.world.random);
+        return ParrotEntity.getRandomSound(this.getWorld(), this.getWorld().random);
     }
 
     @Override
@@ -364,8 +372,8 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
 
     @Override
     public void tick() {
-        if (eatingTicks>0)
-            eatingTicks--;
+        if (this.eatingTicks >0)
+			this.eatingTicks--;
 
         super.tick();
     }
@@ -387,7 +395,7 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
     }
     @Override
     protected void updateSaddle() {
-        if (this.world.isClient) {
+        if (this.getWorld().isClient) {
             return;
         }
         super.updateSaddle();
@@ -397,7 +405,7 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
 
     private void setArmorTypeFromStack(ItemStack stack) {
         this.equipArmor(stack);
-        if (!this.world.isClient) {
+        if (!this.getWorld().isClient) {
             int i;
             this.getAttributeInstance(EntityAttributes.GENERIC_ARMOR).removeModifier(HORSE_ARMOR_BONUS_ID);
             if (this.isHorseArmor(stack) && (i = ((HorseArmorItem)stack.getItem()).getBonus()) != 0) {
@@ -405,53 +413,56 @@ public class MegaParrotEntity extends AbstractHorseEntity implements IAnimatable
             }
         }
     }
-    //gecko
-    @Override
-    public void registerControllers(AnimationData animationData) {
-        animationData.addAnimationController(new AnimationController<>(this, "locomotion_controller", 5, this::locomotion_predicate));
-        animationData.addAnimationController(new AnimationController<>(this, "flutter_controller", 5, this::flutter_predicate));
-        animationData.addAnimationController(new AnimationController<>(this, "eating_controller", 0, this::eating_predicate));
-    }
 
-    private <E extends IAnimatable> PlayState locomotion_predicate(AnimationEvent<E> event) {
+    private <E extends GeoAnimatable> PlayState locomotion_predicate(AnimationState<E> event) {
         MegaParrotEntity megaParrot = (MegaParrotEntity) event.getAnimatable();
 
         if (event.isMoving()) {
             Vec3d vec3d = megaParrot.getVelocity().normalize();
             if (vec3d.x > 0.5f || vec3d.x < -0.5f || vec3d.z > 0.5f || vec3d.z < -0.5f)
-                event.getController().setAnimation(new AnimationBuilder().addAnimation("animation.mega_parrot.run", true));
+                event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.run"));
             else
-                event.getController().setAnimation(new AnimationBuilder().addAnimation("animation.mega_parrot.walk", true));
+                event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.walk"));
         } else
-            event.getController().setAnimation(new AnimationBuilder().addAnimation("animation.mega_parrot.idle", true));
+            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.idle"));
         return PlayState.CONTINUE;
     }
 
-    private <E extends IAnimatable> PlayState flutter_predicate(AnimationEvent<E> event)
-    {
-        MegaParrotEntity megaParrot = (MegaParrotEntity) event.getAnimatable();
+    private <E extends GeoAnimatable> PlayState flutter_predicate(AnimationState<E> event) {
+        MegaParrotEntity megaParrot = this;
 //        Logger.getGlobal().log(Level.SEVERE,megaParrot.dataTracker.get(FALLING)>0?megaParrot.dataTracker.get(FALLING)+"":"");
 
-        if (megaParrot.fallDistance>0) {
-            event.getController().setAnimation(new AnimationBuilder().addAnimation("animation.mega_parrot.wing_flutter", true));
+        if (megaParrot.fallDistance > 0) {
+            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.wing_flutter"));
         } else {
-            event.getController().setAnimation(new AnimationBuilder().addAnimation("animation.mega_parrot.wing_flutter",false));
+            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.wing_flutter"));
         }
+
         return PlayState.CONTINUE;
     }
-    private <E extends IAnimatable> PlayState eating_predicate(AnimationEvent<E> event)
-    {
+    private <E extends GeoAnimatable> PlayState eating_predicate(AnimationState<E> event) {
         if (this.eatingTicks>0){
-            event.getController().setAnimation(new AnimationBuilder().addAnimation("animation.mega_parrot.eat", false));
+            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.eat"));
         } else {
-            event.getController().setAnimation(new AnimationBuilder().addAnimation("animation.mega_parrot.wing_flutter", false));
+            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.wing_flutter"));
         }
         return PlayState.CONTINUE;
     }
 
     @Override
-    public AnimationFactory getFactory() {
-        return this.factory;
+    public EntityView method_48926() {
+        return this.getWorld();
     }
 
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
+        controllers.add(new AnimationController<>(this, "locomotion_controller", 5, this::locomotion_predicate));
+        controllers.add(new AnimationController<>(this, "flutter_controller", 5, this::flutter_predicate));
+        controllers.add(new AnimationController<>(this, "eating_controller", 0, this::eating_predicate));
+    }
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache() {
+        return this.cache;
+    }
 }

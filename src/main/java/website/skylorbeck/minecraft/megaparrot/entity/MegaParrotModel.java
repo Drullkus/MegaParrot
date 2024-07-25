@@ -1,14 +1,13 @@
 package website.skylorbeck.minecraft.megaparrot.entity;
 
 import net.minecraft.util.Identifier;
-import software.bernie.geckolib3.core.event.predicate.AnimationEvent;
-import software.bernie.geckolib3.core.processor.IBone;
-import software.bernie.geckolib3.model.AnimatedGeoModel;
-import software.bernie.geckolib3.model.provider.data.EntityModelData;
+import software.bernie.geckolib.constant.DataTickets;
+import software.bernie.geckolib.core.animation.AnimationState;
+import software.bernie.geckolib.model.GeoModel;
+import software.bernie.geckolib.model.data.EntityModelData;
 import website.skylorbeck.minecraft.megaparrot.Declarar;
 
-public class MegaParrotModel extends AnimatedGeoModel<MegaParrotEntity> {
-
+public class MegaParrotModel extends GeoModel<MegaParrotEntity> {
     @Override
     public Identifier getModelResource(MegaParrotEntity object) {
         return Declarar.getMegaParrotId("geo/mega_parrot.geo.json");
@@ -70,24 +69,19 @@ public class MegaParrotModel extends AnimatedGeoModel<MegaParrotEntity> {
         return Declarar.getMegaParrotId("animations/mega_parrot.animation.json");
     }
 
-    @SuppressWarnings({ "unchecked"})
     @Override
-    public void setLivingAnimations(MegaParrotEntity entity, Integer uniqueID, AnimationEvent customPredicate) {
-        super.setLivingAnimations(entity, uniqueID, customPredicate);
-        IBone head = this.getAnimationProcessor().getBone("head");
+    public void setCustomAnimations(MegaParrotEntity animatable, long instanceId, AnimationState<MegaParrotEntity> animationState) {
+        super.setCustomAnimations(animatable, instanceId, animationState);
 
-        IBone saddle = this.getAnimationProcessor().getBone("saddle");
-        saddle.setHidden(!entity.isSaddled());
+        var head = this.getAnimationProcessor().getBone("head");
 
-        EntityModelData extraData = (EntityModelData) customPredicate.getExtraDataOfType(EntityModelData.class).get(0);
+        var saddle = this.getAnimationProcessor().getBone("saddle");
+        saddle.setHidden(!animatable.isSaddled());
+
+        EntityModelData extraData = animationState.getData(DataTickets.ENTITY_MODEL_DATA);
         if (head != null) {
-            head.setRotationX(extraData.headPitch * ((float) Math.PI / 180F));
-            head.setRotationY(extraData.netHeadYaw * ((float) Math.PI / 180F));
+            head.setRotX(extraData.headPitch() * ((float) Math.PI / 180F));
+            head.setRotY(extraData.netHeadYaw() * ((float) Math.PI / 180F));
         }
-    }
-
-    @Override
-    public IBone getBone(String boneName) {
-        return super.getBone(boneName);
     }
 }
