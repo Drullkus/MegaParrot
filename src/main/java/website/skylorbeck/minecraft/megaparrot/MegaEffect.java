@@ -12,7 +12,7 @@ public class MegaEffect extends StatusEffect {
 
 	@Override
 	public boolean canApplyUpdateEffect(int duration, int amplifier) {
-		return duration <=10;
+		return duration <= 10;
 	}
 
 	@Override

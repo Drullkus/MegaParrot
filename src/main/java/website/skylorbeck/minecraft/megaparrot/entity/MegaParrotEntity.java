@@ -59,6 +59,11 @@ public class MegaParrotEntity extends AbstractHorseEntity implements GeoEntity {
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
     private static final TrackedData<Integer> VARIANT = DataTracker.registerData(MegaParrotEntity.class, TrackedDataHandlerRegistry.INTEGER);
     private static final TrackedData<Float> FALLING = DataTracker.registerData(MegaParrotEntity.class, TrackedDataHandlerRegistry.FLOAT);
+    private static final RawAnimation ANIM_RUN = RawAnimation.begin().thenLoop("animation.mega_parrot.run");
+    private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.mega_parrot.walk");
+    private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.mega_parrot.idle");
+    private static final RawAnimation ANIM_FLAP = RawAnimation.begin().thenLoop("animation.mega_parrot.wing_flutter");
+    private static final RawAnimation ANIM_EAT = RawAnimation.begin().thenLoop("animation.mega_parrot.eat");
     protected int soundTicks;
     protected int eatingTicks = 0;
     private static final UUID HORSE_ARMOR_BONUS_ID = UUID.fromString("556E1665-8B10-40C8-8F9D-CF9B1667F295");
@@ -70,6 +75,7 @@ public class MegaParrotEntity extends AbstractHorseEntity implements GeoEntity {
     private float flapSpeed = 1.0f;
 
     private int featherDropTime = this.random.nextInt(6000)+6000;
+
     public MegaParrotEntity(EntityType<? extends AbstractHorseEntity> entityType, World world) {
         super(entityType, world);
     }
@@ -420,32 +426,34 @@ public class MegaParrotEntity extends AbstractHorseEntity implements GeoEntity {
         if (event.isMoving()) {
             Vec3d vec3d = megaParrot.getVelocity().normalize();
             if (vec3d.x > 0.5f || vec3d.x < -0.5f || vec3d.z > 0.5f || vec3d.z < -0.5f)
-                event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.run"));
+                event.getController().setAnimation(ANIM_RUN);
             else
-                event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.walk"));
-        } else
-            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.idle"));
+                event.getController().setAnimation(ANIM_WALK);
+        } else {
+            event.getController().setAnimation(ANIM_IDLE);
+        }
+
         return PlayState.CONTINUE;
     }
 
     private <E extends GeoAnimatable> PlayState flutter_predicate(AnimationState<E> event) {
         MegaParrotEntity megaParrot = this;
-//        Logger.getGlobal().log(Level.SEVERE,megaParrot.dataTracker.get(FALLING)>0?megaParrot.dataTracker.get(FALLING)+"":"");
 
-        if (megaParrot.fallDistance > 0) {
-            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.wing_flutter"));
+        if (!megaParrot.isOnGround()) {
+            event.getController().setAnimation(ANIM_FLAP);
         } else {
-            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.wing_flutter"));
+            event.getController().setAnimation(ANIM_IDLE);
         }
 
         return PlayState.CONTINUE;
     }
     private <E extends GeoAnimatable> PlayState eating_predicate(AnimationState<E> event) {
-        if (this.eatingTicks>0){
-            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.eat"));
+        if (this.eatingTicks > 0) {
+            event.getController().setAnimation(ANIM_EAT);
         } else {
-            event.getController().setAnimation(RawAnimation.begin().thenPlay("animation.mega_parrot.wing_flutter"));
+            event.getController().setAnimation(ANIM_IDLE);
         }
+
         return PlayState.CONTINUE;
     }
 
@@ -456,9 +464,11 @@ public class MegaParrotEntity extends AbstractHorseEntity implements GeoEntity {
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>(this, "locomotion_controller", 5, this::locomotion_predicate));
-        controllers.add(new AnimationController<>(this, "flutter_controller", 5, this::flutter_predicate));
-        controllers.add(new AnimationController<>(this, "eating_controller", 0, this::eating_predicate));
+        controllers.add(
+                new AnimationController<>(this, "locomotion_controller", 5, this::locomotion_predicate),
+                new AnimationController<>(this, "flutter_controller", 5, this::flutter_predicate),
+                new AnimationController<>(this, "eating_controller", 0, this::eating_predicate)
+        );
     }
 
     @Override
